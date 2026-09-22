@@ -1,161 +1,307 @@
 """
-Minecraft Texture Pack Daltonization
+Image Daltonization
 Adam Sykes
-Jan 14, 2021
-Version 1.2
-This program is designed to convert a Minecraft Texture Pack into colourblind-friendly colours.
-The matrix transformations are based off of Martin Krzywinski's research found at this link: https://mkweb.bcgsc.ca/colorblind/resources.mhtml,
-as well as Joe Dietrich's https://github.com/joergdietrich/daltonize/blob/master/daltonize/daltonize.py
-and Jim's blog at https://ixora.io/projects/colorblindness/color-blindness-simulation-research/.
-This program now supports Protanopia, Deuteranopia, and Tritanopia.
+September 22, 2026
+Version 1.3
+This program is designed to convert images into colourblind-friendly colours.
+The original matrix transformations are based on: 
+    https://mkweb.bcgsc.ca/colorblind/resources.mhtml 
+    https://github.com/joergdietrich/daltonize 
+    https://ixora.io/projects/colorblindness/color-blindness-simulation-research/
+
+This program supports Protanopia, Deuteranopia, and Tritanopia.
 
 To run this program, call 'daltonizer.py' from the command line. The program will prompt the user for the colour vision deficiency to correct
-for, as well as the file path to the texture pack it needs to work on and the correction strength. 
+for, as well as the file path to the folder of images it needs to work on and the correction strength. 
 """
 from types import SimpleNamespace
 import threading
 import os
-import numpy
+import numpy as np
 import sys
 from PIL import Image
-from PIL import ImageEnhance
 
-def main():
-    #main work thread function
-    #Input: type of vision deficiency, the path to the pictures, and the correction strength
-    #Output: None, pictures are changed in place
-    cvdType = input("Protanopia, Deuteranopia, or Tritanopia? ")
-    picPath = input("Path to pictures: ")
-    strength = input("Strength of colour compensation(0-100, 100 = Full Strength): ")
-    pictureList = getPictures(picPath)
+def main(): 
+    """ 
+    Main command-line entry point. 
+    """ 
+    cvdType = input("Protanopia, Deuteranopia, or Tritanopia? ") 
+    picPath = input("Path to pictures: ") 
+    strength = input("Strength of colour compensation (0-100, 100 = Full Strength): ")
 
-    picCounter = SimpleNamespace()
-    picCounter.n = 0
-
-    #dynamically start a number of threads, each given a maximum of 20 pictures to work with
-    #if less than 20 pictures, only start one thread
-    threads = list()
-    if(len(pictureList)//20 > 0):
-        dividedList = numpy.array_split(pictureList,len(pictureList)//20)
-        for i in range(len(pictureList)//20):
-            x = threading.Thread(target=imageProcess,args=(cvdType,dividedList[i],picCounter,strength))
-            threads.append(x)
-            x.start()
-    else:
-        x = threading.Thread(target=imageProcess,args=(cvdType,pictureList,picCounter,strength))
-        threads.append(x)
-        x.start()
-    prog = threading.Thread(target=progress,args=(picCounter,len(pictureList)),daemon=True)
-    prog.start()
-
-    for thread in threads:
-        thread.join()
-    prog.join()
+    try: 
+        strength = float(strength) 
+    except ValueError: 
+        print("Strength must be a number from 0 to 100.") 
+        return 
     
-    return None
+    strength = max(0.0, min(100.0, strength)) 
 
-#wrapper function for the thread to handle the progress bar
-def progress(counter,length):
-    while (counter.n != length):
-        progBar(counter.n,length)
+    pictureList = getPictures(picPath) 
+    if not pictureList: 
+        print("No PNG files were found.") 
+        return 
+    
+    picCounter = SimpleNamespace() 
+    picCounter.n = 0 
 
-#Process the images given by picList according to the colourblindness given by blindType
-def imageProcess(blindType,picList,picCounter,sigStrength):
-    
-    #Arrays for the various transformations needed. The exact values are calibrated from sigStrength using Interpolation
-    protanTransform = numpy.array([(calcCorrect(1,100-int(sigStrength)),calcCorrect(1.05118294,int(sigStrength)),calcCorrect(-0.05116099,int(sigStrength))),(0,1,0),(0,0,1)])
-    deuteranTransform = numpy.array([(1,0,0),(calcCorrect(0.9513092,int(sigStrength)),calcCorrect(1,100-int(sigStrength)),calcCorrect(0.04866992,int(sigStrength))),(0,0,1)])
-    tritanTransform = numpy.array([(1,0,0),(0,1,0),(calcCorrect(-0.86744736,int(sigStrength)),calcCorrect(1.86727089,int(sigStrength)),calcCorrect(1,100-int(sigStrength)))])
-    
-    #array to manipulate color data based on the difference between normal and deficient vision
-    compensatorArray = numpy.array([[calcCorrect(1,100-int(sigStrength)), 0, 0], [calcCorrect(0.7,sigStrength), 1, 0], [calcCorrect(0.7,sigStrength), 0, 1]])
-    
-    #arrays to covert between LMS and RGB color spaces
-    LMSTransform = numpy.array([[0.0841456, 0.708538, 0.148692], [-0.0767272, 0.983854, 0.0817696], [-0.0192357, 0.152575, 0.876454]])
-    RGBTransform = numpy.linalg.inv(LMSTransform)
-    
-    #Go through each pixel and apply the correct series of transformations to it.
-    for image in picList:
-        picCounter.n += 1
-        if(image.endswith('.png',len(image)-4,len(image))):
-            im = Image.open(image).convert('RGBA')
-            width, height = im.size
-            for x in range(width):
-                for y in range(height):
-                    pixel = im.getpixel((x,y))
-                    linPixel = (linearizeV(pixel[0]),linearizeV(pixel[1]),linearizeV(pixel[2]))
-                    npArray = numpy.asarray(linPixel)
-                    lmsArray = numpy.matmul(npArray,LMSTransform)
-                    if(blindType[0] == 'p' or blindType[0] == 'P'):
-                        correctedArray = numpy.matmul(lmsArray,protanTransform)
-                    if(blindType[0] == 'd' or blindType[0] == 'D'):
-                        correctedArray = numpy.matmul(lmsArray,deuteranTransform)
-                    if(blindType[0] == 't' or blindType[0] == 'T'):
-                        correctedArray = numpy.matmul(lmsArray,tritanTransform)
-                    rgbArray = numpy.matmul(correctedArray,RGBTransform)
-                    difference = npArray - rgbArray
-                    comp = numpy.matmul(difference,compensatorArray)
-                    #compute = rgbArray
-                    compute = npArray + comp
-                    rgbCorrected = (delinearizeV(compute[0]),delinearizeV(compute[1]),delinearizeV(compute[2]))
-                    pix = tuple(rgbCorrected)
-                    im.putpixel((x,y),pix)
-            im = im.save(image)
+    # Distribute image files across several worker threads. 
+    threadCount = max(1, (len(pictureList) + 19) // 20) 
+    threadCount = min(threadCount, len(pictureList)) 
+    dividedList = np.array_split( pictureList, threadCount)
 
-def getPictures(dirName):
-    # create a list of file and sub directories 
-    # names in the given directory 
-    listOfFile = os.listdir(dirName)
-    allFiles = list()
-    # Iterate over all the entries
-    for entry in listOfFile:
-        # Create full path
-        fullPath = os.path.join(dirName, entry)
-        # If entry is a directory then get the list of files in this directory 
-        if os.path.isdir(fullPath):
-            allFiles = allFiles + getPictures(fullPath)
-        else:
-            allFiles.append(fullPath)
-                
+    threads = [] 
+    for fileList in dividedList: 
+        thread = threading.Thread(target=imageProcess, args=(cvdType, fileList.tolist(), picCounter, strength)) 
+        threads.append(thread) 
+        thread.start() 
+
+    prog = threading.Thread(target=progress, args=(picCounter, len(pictureList)), daemon=True) 
+    prog.start() 
+
+    for thread in threads: 
+        thread.join() 
+        prog.join()
+
+# Process the images given by picList according to the colourblindness given by blindType
+# Input: blindType - String, first letter matching one of p, d, or t
+# Input: picList - list of Strings, where the strings are directory paths to a png image
+# Input: picCounter - SimpleNamespace, to keep track of overall progress
+# Input: sigStrength - int, the % of correction to apply
+# Output: None, images are edited in-place
+def imageProcess(blindType, picList, picCounter, sigStrength): 
+    """ 
+    Process a list of PNG images. 
+    Each image is processed as a complete NumPy array. 
+    """ 
+
+    for imagePath in picList: 
+        try: 
+            with Image.open(imagePath) as source: 
+                im = source.convert("RGBA") 
+                corrected = daltonize_image(im, blindType, sigStrength) 
+
+                corrected.save(imagePath) 
+
+        except Exception as exc: 
+            print( f"\nError processing '{imagePath}': {exc}", file=sys.stderr) 
+
+        finally: picCounter.n += 1
+
+# Recursively search a given directory for PNG files
+# Input: dirname - String representation of the folder path that contains the files
+# Output: list of Strings, each one a full directory path to a PNG image
+def getPictures(dirName): 
+    """ 
+    Recursively find PNG files in dirName. 
+    """ 
+
+    allFiles = [] 
+    for root, _, files in os.walk(dirName): 
+        for filename in files: 
+            if filename.lower().endswith(".png"): 
+                allFiles.append(os.path.join(root, filename))
+
     return allFiles
 
-# Linearize RGB values from 0-255 into 0-1, with gamma correction
-def linearizeV(v):
-    value = v/255
-    if(value <= 0.04045):
-        value /= 12.92
-    else:
-        value += 0.055
-        value /= 1.055
-        value = value**2.4
-    return value
+# Create the CVD simulation, compensation, and colour space transformation matrices
+# Input: blindType - String, first letter should match either p, d, or t
+# Input: sigStrength - int, % indicating how much colour correction to apply
+# Output: tuple containing 4 numpy ndarrays, in the order of LMS transform, cvd simulation, RGB transform, compensator transform
+def get_transformation_matrices(blindType, sigStrength): 
+    """ 
+    Construct the CVD simulation and compensation matrices.  
+    """ 
 
-#Delinearize RGB values from 0-1 into 0-255, with gamma correction
-def delinearizeV(v):
-    value = v
-    if(value <= 0.0031308):
-        value *= 12.92
-        value *= 255
-    else:
-        value = value ** (1/2.4)
-        value *=1.055
-        value -= 0.055
-        value *= 255
-    value = int(value)
-    return value
+    strength = float(sigStrength) 
 
-#Display a progress bar on the command line
-def progBar(current_val, end_val, bar_length=20):
-    percent = float(current_val) / end_val
-    hashes = '#' * int(round(percent * bar_length))
-    spaces = ' ' * (bar_length - len(hashes))
-    sys.stdout.write("\rPercent: [{0}] {1}% | {2}/{3} |".format(hashes + spaces, int(round(percent * 100)),current_val,end_val))
+    # Matrices for simulating the various colour vision deficiencies. 
+    # These are applied in LMS colour space. 
+    protanTransform = np.array([(calcCorrect(1.0, 100.0 - strength), calcCorrect(1.05118294, strength), calcCorrect(-0.05116099, strength)), 
+                                (0.0, 1.0, 0.0), 
+                                (0.0, 0.0, 1.0) ], 
+                                dtype=np.float32) 
+    
+    deuteranTransform = np.array([(1.0, 0.0, 0.0), 
+                                  (calcCorrect(0.9513092, strength), calcCorrect(1.0, 100.0 - strength), calcCorrect(0.04866992, strength)), 
+                                  (0.0, 0.0, 1.0) ], 
+                                  dtype=np.float32) 
+    
+    tritanTransform = np.array([(1.0, 0.0, 0.0), 
+                                (0.0, 1.0, 0.0), 
+                                (calcCorrect(-0.86744736, strength), calcCorrect(1.86727089, strength), calcCorrect(1.0, 100.0 - strength))], 
+                                dtype=np.float32) 
+
+    # Matrix used to redistribute the lost colour information. 
+    compensatorArray = np.array([[calcCorrect(1.0, 100.0 - strength), 0.0, 0.0 ],
+                                 [calcCorrect(0.7, strength), 1.0, 0.0 ], 
+                                 [calcCorrect(0.7, strength), 0.0, 1.0 ]], 
+                                 dtype=np.float32) 
+    
+    # RGB -> LMS transformation. 
+    LMSTransform = np.array([[0.0841456, 0.708538, 0.148692], 
+                             [-0.0767272, 0.983854, 0.0817696], 
+                             [-0.0192357, 0.152575, 0.876454]], 
+                             dtype=np.float32) 
+    
+    # LMS -> RGB transformation. 
+    RGBTransform = np.linalg.inv(LMSTransform).astype(np.float32) 
+
+    blind = blindType.strip().lower() 
+    if blind.startswith("p"): 
+        simulation = protanTransform 
+    elif blind.startswith("d"): 
+        simulation = deuteranTransform 
+    elif blind.startswith("t"): 
+        simulation = tritanTransform 
+
+    else: raise ValueError( "Colour vision deficiency must be " "Protanopia, Deuteranopia, or Tritanopia." ) 
+
+    return (LMSTransform, simulation, RGBTransform, compensatorArray)
+
+def daltonize_image(image, blindType, strength): 
+    """ 
+    Apply the original Daltonizer algorithm to an entire image at once. 
+    Parameters 
+    ---------- 
+    image: 
+        A PIL Image in RGB or RGBA format. 
+    blindType: 
+        Protanopia, Deuteranopia, or Tritanopia. 
+    strength: 
+        Correction strength from 0 to 100. 
+        
+    Returns 
+    ------- 
+    PIL.Image Corrected image with the original alpha channel preserved. 
+    """ 
+    if image.mode != "RGBA": 
+        image = image.convert("RGBA") 
+
+    # Convert PIL image to NumPy. 
+    # 
+    # Shape: 
+    #   height x width x 4 
+    # 
+    # The first three channels are RGB and the fourth is alpha. 
+    pixels = np.asarray(image) 
+    rgb = pixels[:, :, :3] 
+    alpha = pixels[:, :, 3] 
+
+    # Construct matrices once for the entire image. 
+    (LMSTransform, 
+     simulationTransform, 
+     RGBTransform, 
+     compensatorArray) = get_transformation_matrices(blindType, strength)
+
+    # Convert sRGB -> linear RGB 
+    linearRGB = linearize(rgb) 
+
+    # Convert RGB -> LMS 
+    # Vectorized; every pixel is multiplied simultaneously.
+    lms = linearRGB @ LMSTransform 
+
+    # Simulate the selected colour vision deficiency
+    simulatedLMS = lms @ simulationTransform 
+
+    # Convert simulated LMS -> RGB 
+    simulatedRGB = simulatedLMS @ RGBTransform 
+
+    # Determine the colour information lost by the simulation 
+    difference = linearRGB - simulatedRGB 
+
+    # Redistribute the lost colour information 
+    compensation = difference @ compensatorArray 
+
+    # Apply the compensation 
+    correctedRGB = linearRGB + compensation 
+
+    # Convert linear RGB -> sRGB 
+    # This also clips values outside [0, 1]
+    correctedRGB = delinearize(correctedRGB) 
+
+    # Reattach the original alpha channel
+    output = np.empty_like(pixels) 
+    output[:, :, :3] = correctedRGB 
+    output[:, :, 3] = alpha 
+
+    return Image.fromarray(output, mode="RGBA")
+
+# Convert an sRGB image from uint8 [0, 255] to linear RGB [0, 1]
+# Input: image - numpy array
+# Output: numpy array of same shape as input, with values linearized between 0 - 1
+def linearize(image): 
+    """ 
+    Convert an sRGB image from uint8 [0, 255] to linear RGB [0, 1]. 
+    Works on an entire NumPy image array at once. 
+    """ 
+
+    value = image.astype(np.float32) / 255.0 
+    return np.where(value <= 0.04045, 
+                    value / 12.92, 
+                    ((value + 0.055) / 1.055) ** 2.4)
+
+# Delinearize RGB values from 0-1 into 0-255, with gamma correction
+# Input: image - numpy array 
+# Output: numpy array of same shape as input, with values delinearized to between 0 - 255
+def delinearize(image):
+    """ 
+    Convert linear RGB [0, 1] to sRGB uint8 [0, 255]. 
+    Values outside the valid RGB range are clipped before conversion. 
+    """ 
+
+    value = np.clip(image, 0.0, 1.0) 
+    value = np.where(value <= 0.0031308, 
+                     value * 12.92, 
+                     1.055 * (value ** (1.0 / 2.4)) - 0.055)
+    
+    return np.clip(np.round(value * 255.0), 0, 255 ).astype(np.uint8)
+
+# Wrapper function for the thread to handle the progress bar
+# Input: counter - SimpleNamespace, counting how many units of work done as n
+# Input length - integer, the total amount of work to be done
+# Output: None
+def progress(counter, length): 
+    """ 
+    Wrapper for the progress display thread. 
+    """ 
+
+    while counter.n < length: 
+        progBar(counter.n, length) 
+
+    progBar(length, length) 
+    print()
+
+# Display a progress bar on the command line composed of # and spaces
+# Input: current_val - integer, amount of work done
+# Input: end_val - integer, total amount of work to do
+# Input; bar_length - integer, how long the progress bar should be, in characters
+# Output: None
+def progBar(current_val, end_val, bar_length=20): 
+    """ 
+    Display a progress bar on the command line. 
+    """ 
+    if end_val == 0: 
+        percent = 1.0 
+    else: 
+        percent = float(current_val) / end_val 
+
+    hashes = "#" * int(round(percent * bar_length)) 
+    spaces = " " * (bar_length - len(hashes)) 
+
+    sys.stdout.write("\rPercent: [{0}] {1}% | {2}/{3} |".format( hashes + spaces, int(round(percent * 100)), current_val, end_val)) 
     sys.stdout.flush()
 
-#wrapper for linear interpolation to change the processing strength based on user input value
+# Wrapper for linear interpolation to change the processing strength based on user input value
+# Input: number - an arbitrary number that can cast to float, acts as '100%'
+# Input: strength - a percentage that can cast to float, acts as % of number
+# Output: float that is strength% of number
 def calcCorrect(number, strength):
-    interp = numpy.interp(strength,[0,100],[0,number])
-    return interp
+    """ 
+    Interpolate a value from 0 at 0% strength to `number` at 100%. 
+    """
+
+    return np.interp(strength, [0, 100], [0, number])
 
 if __name__ == "__main__":
     main()
