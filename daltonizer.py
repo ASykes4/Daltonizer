@@ -11,7 +11,7 @@ The original matrix transformations are based on:
 
 This program supports Protanopia, Deuteranopia, and Tritanopia.
 
-To run this program, call 'daltonizer.py' from the command line. The program will prompt the user for the colour vision deficiency to correct
+To run this program, call 'gui.py' from the command line, or simply run the file. The program will prompt the user for the colour vision deficiency to correct
 for, as well as the file path to the folder of images it needs to work on and the correction strength. 
 """
 from types import SimpleNamespace
@@ -20,48 +20,50 @@ import os
 import numpy as np
 import sys
 from PIL import Image
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
 
-def main(): 
-    """ 
-    Main command-line entry point. 
-    """ 
-    cvdType = input("Protanopia, Deuteranopia, or Tritanopia? ") 
-    picPath = input("Path to pictures: ") 
-    strength = input("Strength of colour compensation (0-100, 100 = Full Strength): ")
+# def main(): 
+#     """ 
+#     Main command-line entry point. 
+#     """ 
+#     cvdType = input("Protanopia, Deuteranopia, or Tritanopia? ") 
+#     picPath = input("Path to pictures: ") 
+#     strength = input("Strength of colour compensation (0-100, 100 = Full Strength): ")
 
-    try: 
-        strength = float(strength) 
-    except ValueError: 
-        print("Strength must be a number from 0 to 100.") 
-        return 
+#     try: 
+#         strength = float(strength) 
+#     except ValueError: 
+#         print("Strength must be a number from 0 to 100.") 
+#         return 
     
-    strength = max(0.0, min(100.0, strength)) 
+#     strength = max(0.0, min(100.0, strength)) 
 
-    pictureList = getPictures(picPath) 
-    if not pictureList: 
-        print("No PNG files were found.") 
-        return 
+#     pictureList = getPictures(picPath) 
+#     if not pictureList: 
+#         print("No PNG files were found.") 
+#         return 
     
-    picCounter = SimpleNamespace() 
-    picCounter.n = 0 
+#     picCounter = SimpleNamespace() 
+#     picCounter.n = 0 
 
-    # Distribute image files across several worker threads. 
-    threadCount = max(1, (len(pictureList) + 19) // 20) 
-    threadCount = min(threadCount, len(pictureList)) 
-    dividedList = np.array_split( pictureList, threadCount)
+#     # Distribute image files across several worker threads. 
+#     threadCount = max(1, (len(pictureList) + 19) // 20) 
+#     threadCount = min(threadCount, len(pictureList)) 
+#     dividedList = np.array_split( pictureList, threadCount)
 
-    threads = [] 
-    for fileList in dividedList: 
-        thread = threading.Thread(target=imageProcess, args=(cvdType, fileList.tolist(), picCounter, strength)) 
-        threads.append(thread) 
-        thread.start() 
+#     threads = [] 
+#     for fileList in dividedList: 
+#         thread = threading.Thread(target=imageProcess, args=(cvdType, fileList.tolist(), picCounter, strength)) 
+#         threads.append(thread) 
+#         thread.start() 
 
-    prog = threading.Thread(target=progress, args=(picCounter, len(pictureList)), daemon=True) 
-    prog.start() 
+#     prog = threading.Thread(target=progress, args=(picCounter, len(pictureList)), daemon=True) 
+#     prog.start() 
 
-    for thread in threads: 
-        thread.join() 
-        prog.join()
+#     for thread in threads: 
+#         thread.join() 
+#         prog.join()
 
 # Process the images given by picList according to the colourblindness given by blindType
 # Input: blindType - String, first letter matching one of p, d, or t
@@ -69,24 +71,24 @@ def main():
 # Input: picCounter - SimpleNamespace, to keep track of overall progress
 # Input: sigStrength - int, the % of correction to apply
 # Output: None, images are edited in-place
-def imageProcess(blindType, picList, picCounter, sigStrength): 
-    """ 
-    Process a list of PNG images. 
-    Each image is processed as a complete NumPy array. 
-    """ 
+# def imageProcess(blindType, picList, picCounter, sigStrength): 
+#     """ 
+#     Process a list of PNG images. 
+#     Each image is processed as a complete NumPy array. 
+#     """ 
 
-    for imagePath in picList: 
-        try: 
-            with Image.open(imagePath) as source: 
-                im = source.convert("RGBA") 
-                corrected = daltonize_image(im, blindType, sigStrength) 
+#     for imagePath in picList: 
+#         try: 
+#             with Image.open(imagePath) as source: 
+#                 im = source.convert("RGBA") 
+#                 corrected = daltonize_image(im, blindType, sigStrength) 
 
-                corrected.save(imagePath) 
+#                 corrected.save(imagePath) 
 
-        except Exception as exc: 
-            print( f"\nError processing '{imagePath}': {exc}", file=sys.stderr) 
+#         except Exception as exc: 
+#             print( f"\nError processing '{imagePath}': {exc}", file=sys.stderr) 
 
-        finally: picCounter.n += 1
+#         finally: picCounter.n += 1
 
 # Recursively search a given directory for PNG files
 # Input: dirname - String representation of the folder path that contains the files
@@ -159,21 +161,14 @@ def get_transformation_matrices(blindType, sigStrength):
 
     return (LMSTransform, simulation, RGBTransform, compensatorArray)
 
+# Apply the Daltonizer algorithm to an entire image at once
+# Input: image - A PIL Image in RGB or RGBA format
+# Input: blindType - String, with first letter matching one of p, d, or t
+# Input: strength - int, representing the % amount of correction to apply
+# Output: PIL Image object
 def daltonize_image(image, blindType, strength): 
     """ 
-    Apply the original Daltonizer algorithm to an entire image at once. 
-    Parameters 
-    ---------- 
-    image: 
-        A PIL Image in RGB or RGBA format. 
-    blindType: 
-        Protanopia, Deuteranopia, or Tritanopia. 
-    strength: 
-        Correction strength from 0 to 100. 
-        
-    Returns 
-    ------- 
-    PIL.Image Corrected image with the original alpha channel preserved. 
+    Apply the Daltonizer algorithm to an entire image at once
     """ 
     if image.mode != "RGBA": 
         image = image.convert("RGBA") 
@@ -302,6 +297,3 @@ def calcCorrect(number, strength):
     """
 
     return np.interp(strength, [0, 100], [0, number])
-
-if __name__ == "__main__":
-    main()
