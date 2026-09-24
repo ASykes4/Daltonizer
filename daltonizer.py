@@ -39,7 +39,7 @@ from tkinter import filedialog, messagebox, ttk
     
 #     strength = max(0.0, min(100.0, strength)) 
 
-#     pictureList = getPictures(picPath) 
+#     pictureList = get_pictures(picPath) 
 #     if not pictureList: 
 #         print("No PNG files were found.") 
 #         return 
@@ -93,18 +93,18 @@ from tkinter import filedialog, messagebox, ttk
 # Recursively search a given directory for PNG files
 # Input: dirname - String representation of the folder path that contains the files
 # Output: list of Strings, each one a full directory path to a PNG image
-def getPictures(dirName): 
-    """ 
-    Recursively find PNG files in dirName. 
-    """ 
+# def get_pictures(dirName): 
+#     """ 
+#     Recursively find PNG files in dirName. 
+#     """ 
 
-    allFiles = [] 
-    for root, _, files in os.walk(dirName): 
-        for filename in files: 
-            if filename.lower().endswith(".png"): 
-                allFiles.append(os.path.join(root, filename))
+#     allFiles = [] 
+#     for root, _, files in os.walk(dirName): 
+#         for filename in files: 
+#             if filename.lower().endswith(".png"): 
+#                 allFiles.append(os.path.join(root, filename))
 
-    return allFiles
+#     return allFiles
 
 # Create the CVD simulation, compensation, and colour space transformation matrices
 # Input: blindType - String, first letter should match either p, d, or t
@@ -119,25 +119,25 @@ def get_transformation_matrices(blindType, sigStrength):
 
     # Matrices for simulating the various colour vision deficiencies. 
     # These are applied in LMS colour space. 
-    protanTransform = np.array([(calcCorrect(1.0, 100.0 - strength), calcCorrect(1.05118294, strength), calcCorrect(-0.05116099, strength)), 
+    protanTransform = np.array([(calc_correct(1.0, 100.0 - strength), calc_correct(1.05118294, strength), calc_correct(-0.05116099, strength)), 
                                 (0.0, 1.0, 0.0), 
                                 (0.0, 0.0, 1.0) ], 
                                 dtype=np.float32) 
     
     deuteranTransform = np.array([(1.0, 0.0, 0.0), 
-                                  (calcCorrect(0.9513092, strength), calcCorrect(1.0, 100.0 - strength), calcCorrect(0.04866992, strength)), 
+                                  (calc_correct(0.9513092, strength), calc_correct(1.0, 100.0 - strength), calc_correct(0.04866992, strength)), 
                                   (0.0, 0.0, 1.0) ], 
                                   dtype=np.float32) 
     
     tritanTransform = np.array([(1.0, 0.0, 0.0), 
                                 (0.0, 1.0, 0.0), 
-                                (calcCorrect(-0.86744736, strength), calcCorrect(1.86727089, strength), calcCorrect(1.0, 100.0 - strength))], 
+                                (calc_correct(-0.86744736, strength), calc_correct(1.86727089, strength), calc_correct(1.0, 100.0 - strength))], 
                                 dtype=np.float32) 
 
     # Matrix used to redistribute the lost colour information. 
-    compensatorArray = np.array([[calcCorrect(1.0, 100.0 - strength), 0.0, 0.0 ],
-                                 [calcCorrect(0.7, strength), 1.0, 0.0 ], 
-                                 [calcCorrect(0.7, strength), 0.0, 1.0 ]], 
+    compensatorArray = np.array([[calc_correct(1.0, 100.0 - strength), 0.0, 0.0 ],
+                                 [calc_correct(0.7, strength), 1.0, 0.0 ], 
+                                 [calc_correct(0.7, strength), 0.0, 1.0 ]], 
                                  dtype=np.float32) 
     
     # RGB -> LMS transformation. 
@@ -262,9 +262,9 @@ def progress(counter, length):
     """ 
 
     while counter.n < length: 
-        progBar(counter.n, length) 
+        prog_bar(counter.n, length) 
 
-    progBar(length, length) 
+    prog_bar(length, length) 
     print()
 
 # Display a progress bar on the command line composed of # and spaces
@@ -272,7 +272,7 @@ def progress(counter, length):
 # Input: end_val - integer, total amount of work to do
 # Input; bar_length - integer, how long the progress bar should be, in characters
 # Output: None
-def progBar(current_val, end_val, bar_length=20): 
+def prog_bar(current_val, end_val, bar_length=20): 
     """ 
     Display a progress bar on the command line. 
     """ 
@@ -291,7 +291,7 @@ def progBar(current_val, end_val, bar_length=20):
 # Input: number - an arbitrary number that can cast to float, acts as '100%'
 # Input: strength - a percentage that can cast to float, acts as % of number
 # Output: float that is strength% of number
-def calcCorrect(number, strength):
+def calc_correct(number, strength):
     """ 
     Interpolate a value from 0 at 0% strength to `number` at 100%. 
     """
