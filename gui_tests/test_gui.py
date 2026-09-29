@@ -136,3 +136,31 @@ def test_correction_strength(gui_process: subprocess.Popen[bytes]) -> None:
     assert gui_process.poll() is None
 
     close_gui()
+
+
+# Verify the running GUI displays all three preview panels.
+# Input: None, interacts with the running Daltonizer application
+# Output: None, verifies the preview interface is visible
+def test_gui_preview_panels() -> None:
+    """Verify the GUI displays the three preview panels.
+
+    Returns:
+        None.
+    """
+    import pyautogui
+
+    window = pyautogui.getWindowsWithTitle("Daltonizer")[0]
+
+    left = window.left
+    top = window.top
+    width = window.width
+    height = window.height
+
+    preview_y = top + int(height * 0.25)
+    left_preview_x = left + int(width * 0.17)
+    middle_preview_x = left + int(width * 0.50)
+    right_preview_x = left + int(width * 0.83)
+
+    assert pyautogui.pixel(left_preview_x, preview_y) is not None
+    assert pyautogui.pixel(middle_preview_x, preview_y) is not None
+    assert pyautogui.pixel(right_preview_x, preview_y) is not None
