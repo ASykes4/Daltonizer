@@ -139,6 +139,46 @@ def daltonize_image(image, blindType, strength):
 
     return Image.fromarray(output, mode="RGBA")
 
+# Simulate the selected colour-vision deficiency on an entire image.
+# Input: image - Image.Image, PIL image in RGB or RGBA format
+# Input: blind_type - str, colour-vision deficiency to simulate
+# Input: strength - int | float, percentage of the deficiency to simulate
+# Output: Image.Image, simulated image in RGBA format
+def simulate_cvd(image: Image.Image, blind_type: str, strength: int | float) -> Image.Image:
+    """Simulate a selected colour-vision deficiency.
+
+    Args:
+        image: PIL image to transform.
+        blind_type: Colour-vision deficiency to simulate.
+        strength: Percentage of the deficiency to simulate.
+
+    Returns:
+        A new RGBA PIL image containing the simulated colours.
+    """
+    if image.mode != "RGBA":
+        image = image.convert("RGBA")
+
+    pixels = np.asarray(image)
+    rgb = pixels[:, :, :3]
+    alpha = pixels[:, :, 3]
+
+    LMSTransform, simulationTransform, RGBTransform, _ = (
+        get_transformation_matrices(blind_type, strength)
+    )
+
+    linearRGB = linearize(rgb)
+    lms = linearRGB @ LMSTransform
+    simulatedLMS = lms @ simulationTransform
+    simulatedRGB = simulatedLMS @ RGBTransform
+    simulatedRGB = delinearize(simulatedRGB)
+
+    output = np.empty_like(pixels)
+    output[:, :, :3] = simulatedRGB
+    output[:, :, 3] = alpha
+
+    return Image.fromarray(output, mode="RGBA")
+
+
 # Convert an sRGB image from uint8 [0, 255] to linear RGB [0, 1]
 # Input: image - numpy array
 # Output: numpy array of same shape as input, with values linearized between 0 - 1
