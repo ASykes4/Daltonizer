@@ -136,7 +136,7 @@ class DaltonizerGUI:
         Returns:
             None.
         """
-        preview_frame = ttk.LabelFrame(main, text="Preview", padding=10)
+        preview_frame = ttk.LabelFrame(main, text="Preview")
         preview_frame.pack(fill="both", expand=True, pady=5)
 
         preview_columns = (
@@ -149,8 +149,6 @@ class DaltonizerGUI:
             ttk.Label(preview_frame, text=title).grid(
                 row=0,
                 column=column,
-                padx=10,
-                pady=(0, 5)
             )
 
             label = ttk.Label(
@@ -159,7 +157,7 @@ class DaltonizerGUI:
                 anchor="center",
                 width=40
             )
-            label.grid(row=1, column=column, padx=10, pady=5, sticky="nsew")
+            label.grid(row=1, column=column, sticky="nsew")
 
             setattr(self, attribute, label)
 
@@ -183,7 +181,24 @@ class DaltonizerGUI:
             A resized copy of the image that preserves its aspect ratio.
         """
         preview = image.copy()
-        return ImageOps.contain(preview, maximum_size)
+
+        width, height = image.size
+        maximum_width, maximum_height = maximum_size
+
+        scale = min(maximum_width / width, maximum_height / height)
+
+        if scale >= 1:
+            new_size = (
+                max(1, round(width * scale)),
+                max(1, round(height * scale))
+            )
+            return ImageOps.contain(preview, new_size, Image.Resampling.NEAREST)
+
+        new_size = (
+            max(1, round(width * scale)),
+            max(1, round(height * scale))
+        )
+        return ImageOps.contain(preview, maximum_size, Image.Resampling.LANCZOS)
 
 
     # Load an image into the preview and generate its initial transformations.
@@ -230,13 +245,9 @@ class DaltonizerGUI:
             self.strength.get()
         )
 
-        original_preview = self.prepare_preview_image(preview)
-        simulated_preview = self.prepare_preview_image(simulated)
-        corrected_preview = self.prepare_preview_image(corrected)
-
-        self.preview_photo_original = ImageTk.PhotoImage(original_preview)
-        self.preview_photo_simulated = ImageTk.PhotoImage(simulated_preview)
-        self.preview_photo_corrected = ImageTk.PhotoImage(corrected_preview)
+        self.preview_photo_original = ImageTk.PhotoImage(preview)
+        self.preview_photo_simulated = ImageTk.PhotoImage(simulated)
+        self.preview_photo_corrected = ImageTk.PhotoImage(corrected)
 
         self.preview_original_label.config(image=self.preview_photo_original, text="")
         self.preview_simulated_label.config(image=self.preview_photo_simulated, text="")
@@ -547,9 +558,9 @@ def create_window(test_mode: bool = False) -> tk.Tk:
     
     root = tk.Tk() 
     root.title("Daltonizer") 
-    root.geometry("1200x800") 
+    root.geometry("1200x900") 
     if test_mode: 
-        root.geometry("1200x800+100+100") 
+        root.geometry("1200x900+50+50")
 
     root.update_idletasks() 
     return root 

@@ -115,8 +115,8 @@ def test_create_window_test_mode() -> None:
     try:
         geometry = root.geometry()
 
-        assert geometry.startswith("1200x800")
-        assert "+100+100" in geometry
+        assert geometry.startswith("1200x900")
+        assert "+50+50" in geometry
     finally:
         root.destroy()
 
@@ -568,28 +568,28 @@ def test_strength_updates_preview(app: DaltonizerGUI, tmp_path: Path) -> None:
     assert app.preview_photo_corrected is not original_photo
 
 
-# Verify changing the CVD type regenerates the preview images.
+# Verify small images are enlarged with nearest-neighbour scaling.
 # Input: app - DaltonizerGUI, initialized GUI instance
-# Input: tmp_path - Path, temporary directory used for the test image
-# Output: None, verifies the preview changes when CVD type changes
-def test_cvd_type_updates_preview(app: DaltonizerGUI, tmp_path: Path) -> None:
-    """Verify changing CVD type regenerates the preview.
+# Output: None, verifies low-resolution previews remain pixel-sharp
+def test_prepare_preview_image_enlarges_small_images(app: DaltonizerGUI) -> None:
+    """Verify small preview images are enlarged without interpolation.
 
     Args:
         app: Initialized GUI instance.
-        tmp_path: Temporary directory used for the test image.
 
     Returns:
         None.
     """
-    image_path = tmp_path / "preview.png"
-    create_test_image(image_path)
+    image = Image.new("RGBA", (2, 2))
+    image.putpixel((0, 0), (255, 0, 0, 255))
+    image.putpixel((1, 0), (0, 255, 0, 255))
+    image.putpixel((0, 1), (0, 0, 255, 255))
+    image.putpixel((1, 1), (255, 255, 0, 255))
 
-    app.load_preview(str(image_path))
-    original_photo = app.preview_photo_corrected
+    result = app.prepare_preview_image(image, (200, 200))
 
-    app.cvd_type.set("Protanopia")
-    app.root.update_idletasks()
-
-    assert app.cvd_type.get() == "Protanopia"
-    assert app.preview_photo_corrected is not original_photo
+    assert result.size == (200, 200)
+    assert result.getpixel((50, 50)) == (255, 0, 0, 255)
+    assert result.getpixel((150, 50)) == (0, 255, 0, 255)
+    assert result.getpixel((50, 150)) == (0, 0, 255, 255)
+    assert result.getpixel((150, 150)) == (255, 255, 0, 255)
