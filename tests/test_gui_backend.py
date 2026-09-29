@@ -469,3 +469,119 @@ def test_processing_failed(mock_error: MagicMock, app: DaltonizerGUI) -> None:
 
     assert app.running is False
     mock_error.assert_called_once()
+
+
+# Verify preview preparation preserves the aspect ratio and maximum dimensions.
+# Input: app - DaltonizerGUI, initialized GUI instance
+# Output: None, verifies preview dimensions are constrained correctly
+def test_prepare_preview_image(app: DaltonizerGUI) -> None:
+    """Verify preview images are resized without exceeding their bounds.
+
+    Args:
+        app: Initialized GUI instance.
+
+    Returns:
+        None.
+    """
+    image = Image.new("RGBA", (1600, 800))
+
+    result = app.prepare_preview_image(image, (350, 260))
+
+    assert result.size == (350, 175)
+
+
+# Verify updating an empty preview does not attempt image processing.
+# Input: app - DaltonizerGUI, initialized GUI instance
+# Output: None, verifies empty preview updates are safely ignored
+def test_update_preview_without_image(app: DaltonizerGUI) -> None:
+    """Verify an empty preview update is safely ignored.
+
+    Args:
+        app: Initialized GUI instance.
+
+    Returns:
+        None.
+    """
+    app.update_preview()
+
+    assert app.preview_source is None
+
+
+# Verify loading an image stores the source image and generates previews.
+# Input: app - DaltonizerGUI, initialized GUI instance
+# Input: tmp_path - Path, temporary directory used for the test image
+# Output: None, verifies the preview pipeline produces three images
+def test_load_preview(app: DaltonizerGUI, tmp_path: Path) -> None:
+    """Verify loading an image creates all three preview representations.
+
+    Args:
+        app: Initialized GUI instance.
+        tmp_path: Temporary directory used for the test image.
+
+    Returns:
+        None.
+    """
+    image_path = tmp_path / "preview.png"
+    create_test_image(image_path)
+
+    app.load_preview(str(image_path))
+    app.root.update_idletasks()
+
+    assert app.preview_source is not None
+    assert app.preview_photo_original is not None
+    assert app.preview_photo_simulated is not None
+    assert app.preview_photo_corrected is not None
+
+
+# Verify changing correction strength regenerates the preview images.
+# Input: app - DaltonizerGUI, initialized GUI instance
+# Input: tmp_path - Path, temporary directory used for the test image
+# Output: None, verifies the preview changes when strength changes
+def test_strength_updates_preview(app: DaltonizerGUI, tmp_path: Path) -> None:
+    """Verify correction strength changes regenerate the preview.
+
+    Args:
+        app: Initialized GUI instance.
+        tmp_path: Temporary directory used for the test image.
+
+    Returns:
+        None.
+    """
+    image_path = tmp_path / "preview.png"
+    create_test_image(image_path)
+
+    app.load_preview(str(image_path))
+    original_photo = app.preview_photo_corrected
+
+    app.update_strength("50")
+    app.root.update_idletasks()
+
+    assert app.strength.get() == 50
+    assert app.preview_photo_corrected is not original_photo
+
+
+# Verify changing the CVD type regenerates the preview images.
+# Input: app - DaltonizerGUI, initialized GUI instance
+# Input: tmp_path - Path, temporary directory used for the test image
+# Output: None, verifies the preview changes when CVD type changes
+def test_cvd_type_updates_preview(app: DaltonizerGUI, tmp_path: Path) -> None:
+    """Verify changing CVD type regenerates the preview.
+
+    Args:
+        app: Initialized GUI instance.
+        tmp_path: Temporary directory used for the test image.
+
+    Returns:
+        None.
+    """
+    image_path = tmp_path / "preview.png"
+    create_test_image(image_path)
+
+    app.load_preview(str(image_path))
+    original_photo = app.preview_photo_corrected
+
+    app.cvd_type.set("Protanopia")
+    app.root.update_idletasks()
+
+    assert app.cvd_type.get() == "Protanopia"
+    assert app.preview_photo_corrected is not original_photo
