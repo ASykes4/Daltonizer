@@ -12,8 +12,8 @@ class DaltonizerGUI:
 
         self.root = root
         self.root.title("Daltonizer")
-        self.root.geometry("550x430")
-        self.root.resizable(False, False)
+        self.root.geometry("500x600")
+        self.root.resizable(True, True)
 
         # Variables
         self.running = False
@@ -184,7 +184,7 @@ class DaltonizerGUI:
         images = []
 
         if path is None:
-            
+
             path = self.input_path.get()
 
         if os.path.isfile(path):
@@ -351,9 +351,9 @@ def create_window(test_mode: bool = False) -> tk.Tk:
     
     root = tk.Tk() 
     root.title("Daltonizer") 
-    root.geometry("800x600") 
+    root.geometry("400x600") 
     if test_mode: 
-        root.geometry("800x600+100+100") 
+        root.geometry("400x600+100+100") 
 
     root.update_idletasks() 
     return root 
