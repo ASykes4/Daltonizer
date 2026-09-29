@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from daltonizer import calc_correct, daltonize_image, delinearize, get_transformation_matrices, linearize
+from daltonizer import calc_correct, daltonize_image, delinearize, get_transformation_matrices, linearize, simulate_cvd
 
 
 # Create a small RGB image array for testing.
@@ -369,3 +369,68 @@ def test_image_file_integration(test_image: Image.Image, tmp_path: Path) -> None
     with Image.open(output_path) as output:
         assert output.size == test_image.size
         assert output.mode == "RGBA"
+
+
+# Verify CVD simulation preserves the image dimensions and alpha channel.
+# Input: None, creates a small RGBA test image
+# Output: None, verifies the simulation preserves image structure
+def test_simulate_cvd_preserves_image_structure() -> None:
+    """Verify CVD simulation preserves image dimensions and transparency.
+
+    Returns:
+        None.
+    """
+    image = Image.new("RGBA", (4, 3), (255, 0, 0, 128))
+
+    result = simulate_cvd(image, "Deuteranopia", 100)
+
+    assert result.mode == "RGBA"
+    assert result.size == image.size
+    assert result.getchannel("A").getextrema() == (128, 128)
+
+
+# Verify zero simulation strength leaves an image effectively unchanged.
+# Input: None, creates a small RGBA test image
+# Output: None, verifies zero-strength simulation preserves colour values
+def test_simulate_cvd_zero_strength() -> None:
+    """Verify zero simulation strength preserves the source colours.
+
+    Returns:
+        None.
+    """
+    image = Image.new("RGBA", (2, 2), (120, 80, 200, 255))
+
+    result = simulate_cvd(image, "Protanopia", 0)
+
+    assert np.max(
+        np.abs(np.asarray(result, dtype=np.int16) - np.asarray(image, dtype=np.int16))
+    ) <= 1
+
+
+# Verify all supported CVD types can be simulated through the transformation pipeline.
+# Input: None, creates a representative multi-colour image
+# Output: None, verifies every supported deficiency produces an RGBA image
+def test_simulate_cvd_supported_types() -> None:
+    """Verify simulation works for all supported colour-vision deficiencies.
+
+    Returns:
+        None.
+    """
+    image = Image.new("RGBA", (3, 2))
+
+    pixels = [
+        (255, 0, 0, 255),
+        (0, 255, 0, 255),
+        (0, 0, 255, 255),
+        (255, 255, 0, 255),
+        (0, 255, 255, 255),
+        (255, 0, 255, 255),
+    ]
+
+    image.putdata(pixels)
+
+    for cvd_type in ("Protanopia", "Deuteranopia", "Tritanopia"):
+        result = simulate_cvd(image, cvd_type, 100)
+
+        assert result.mode == "RGBA"
+        assert result.size == image.size
