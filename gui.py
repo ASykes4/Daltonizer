@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -15,6 +16,7 @@ class DaltonizerGUI:
         self.root.resizable(False, False)
 
         # Variables
+        self.running = False
         self.input_path = tk.StringVar()
         self.output_path = tk.StringVar()
         self.cvd_type = tk.StringVar(value="Deuteranopia")
@@ -24,6 +26,9 @@ class DaltonizerGUI:
 
         # Build interface
         self.create_widgets()
+
+        # Configure the window close callback.
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     # Interface construction
     def create_widgets(self):
@@ -90,11 +95,11 @@ class DaltonizerGUI:
         strength_frame.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
 
         self.strength_scale = ttk.Scale(strength_frame, from_=0, to=100, orient="horizontal", command=self.update_strength)
-        self.strength_scale.set(self.strength.get())
         self.strength_scale.pack(side="left", fill="x", expand=True)
 
         self.strength_label = ttk.Label(strength_frame, text="100%")
         self.strength_label.pack(side="left", padx=(10, 0))
+        self.strength_scale.set(self.strength.get())
 
         # Progress Bar
         self.progress = ttk.Progressbar(main, variable=self.progress_value, maximum=100)
@@ -164,7 +169,7 @@ class DaltonizerGUI:
 
 
     # Find images
-    def get_images(self, path):
+    def get_images(self, path: str | None = None) -> list[str]:
 
         extensions = {
             ".png",
@@ -177,6 +182,10 @@ class DaltonizerGUI:
         }
 
         images = []
+
+        if path is None:
+            
+            path = self.input_path.get()
 
         if os.path.isfile(path):
 
@@ -204,20 +213,24 @@ class DaltonizerGUI:
 
         input_path = self.input_path.get().strip()
         output_path = self.output_path.get().strip()
+        self.running = True
 
         if not input_path:
 
             messagebox.showerror("No input selected", "Please select an image or folder.")
+            self.running = False
             return
 
         if not os.path.exists(input_path):
 
             messagebox.showerror("Invalid input", "The selected file or folder does not exist.")
+            self.running = False
             return
 
         if not output_path:
 
             messagebox.showerror("No output folder", "Please select an output folder.")
+            self.running = False
             return
 
         images = self.get_images(input_path)
@@ -225,6 +238,7 @@ class DaltonizerGUI:
         if not images:
 
             messagebox.showerror("No images", "No supported image files were found.")
+            self.running = False
             return
 
         os.makedirs(output_path, exist_ok=True)
@@ -291,6 +305,7 @@ class DaltonizerGUI:
 
         percentage = (completed / total) * 100
         self.progress_value.set(percentage)
+        self.progress.update_idletasks()
         self.status.set(f"Processing {completed} / {total}...")
 
 
@@ -300,6 +315,8 @@ class DaltonizerGUI:
         self.progress_value.set(100)
         self.status.set(f"Finished — {total} image(s) processed.")
         self.process_button.config(state="normal")
+        self.progress.update_idletasks()
+        self.running = False
         messagebox.showinfo("Complete", f"{total} image(s) were successfully processed.")
 
 
@@ -308,12 +325,52 @@ class DaltonizerGUI:
 
         self.process_button.config(state="normal")
         self.status.set("Processing failed.")
+        self.progress.update_idletasks()
+        self.running = False
         messagebox.showerror("Processing error", error)
 
+    def on_close(self):
+        
+        self.running = False
+        self.root.destroy()
 
 
-if __name__ == "__main__":
 
-    root = tk.Tk()
-    app = DaltonizerGUI(root)
-    root.mainloop()
+# Create the application's main Tkinter window. 
+# Input: test_mode - bool, whether deterministic test geometry should be used 
+# Output: tk.Tk, configured main application window 
+def create_window(test_mode: bool = False) -> tk.Tk: 
+    """Create and configure the main application window. 
+
+    Args: 
+        test_mode: Whether to use deterministic geometry for GUI testing. 
+        
+    Returns: 
+        The configured Tkinter root window. 
+    """ 
+    
+    root = tk.Tk() 
+    root.title("Daltonizer") 
+    root.geometry("800x600") 
+    if test_mode: 
+        root.geometry("800x600+100+100") 
+
+    root.update_idletasks() 
+    return root 
+    
+    
+# Launch the Daltonizer application. 
+# Input: test_mode - bool, whether deterministic test geometry should be used 
+# Output: None, runs the Tkinter application until the window closes 
+def main(test_mode: bool = False) -> None: 
+    """Launch the Daltonizer application. 
+    
+    Returns: 
+        None. 
+    """ 
+    root = create_window() 
+    app = DaltonizerGUI(root) 
+    root.mainloop() 
+        
+if __name__ == "__main__": 
+    main("--test" in sys.argv)

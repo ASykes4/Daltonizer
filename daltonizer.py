@@ -14,97 +14,14 @@ This program supports Protanopia, Deuteranopia, and Tritanopia.
 To run this program, call 'gui.py' from the command line, or simply run the file. The program will prompt the user for the colour vision deficiency to correct
 for, as well as the file path to the folder of images it needs to work on and the correction strength. 
 """
-from types import SimpleNamespace
-import threading
-import os
+# from types import SimpleNamespace
+# import threading
+# import os
 import numpy as np
 import sys
 from PIL import Image
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
 
-# def main(): 
-#     """ 
-#     Main command-line entry point. 
-#     """ 
-#     cvdType = input("Protanopia, Deuteranopia, or Tritanopia? ") 
-#     picPath = input("Path to pictures: ") 
-#     strength = input("Strength of colour compensation (0-100, 100 = Full Strength): ")
 
-#     try: 
-#         strength = float(strength) 
-#     except ValueError: 
-#         print("Strength must be a number from 0 to 100.") 
-#         return 
-    
-#     strength = max(0.0, min(100.0, strength)) 
-
-#     pictureList = get_pictures(picPath) 
-#     if not pictureList: 
-#         print("No PNG files were found.") 
-#         return 
-    
-#     picCounter = SimpleNamespace() 
-#     picCounter.n = 0 
-
-#     # Distribute image files across several worker threads. 
-#     threadCount = max(1, (len(pictureList) + 19) // 20) 
-#     threadCount = min(threadCount, len(pictureList)) 
-#     dividedList = np.array_split( pictureList, threadCount)
-
-#     threads = [] 
-#     for fileList in dividedList: 
-#         thread = threading.Thread(target=imageProcess, args=(cvdType, fileList.tolist(), picCounter, strength)) 
-#         threads.append(thread) 
-#         thread.start() 
-
-#     prog = threading.Thread(target=progress, args=(picCounter, len(pictureList)), daemon=True) 
-#     prog.start() 
-
-#     for thread in threads: 
-#         thread.join() 
-#         prog.join()
-
-# Process the images given by picList according to the colourblindness given by blindType
-# Input: blindType - String, first letter matching one of p, d, or t
-# Input: picList - list of Strings, where the strings are directory paths to a png image
-# Input: picCounter - SimpleNamespace, to keep track of overall progress
-# Input: sigStrength - int, the % of correction to apply
-# Output: None, images are edited in-place
-# def imageProcess(blindType, picList, picCounter, sigStrength): 
-#     """ 
-#     Process a list of PNG images. 
-#     Each image is processed as a complete NumPy array. 
-#     """ 
-
-#     for imagePath in picList: 
-#         try: 
-#             with Image.open(imagePath) as source: 
-#                 im = source.convert("RGBA") 
-#                 corrected = daltonize_image(im, blindType, sigStrength) 
-
-#                 corrected.save(imagePath) 
-
-#         except Exception as exc: 
-#             print( f"\nError processing '{imagePath}': {exc}", file=sys.stderr) 
-
-#         finally: picCounter.n += 1
-
-# Recursively search a given directory for PNG files
-# Input: dirname - String representation of the folder path that contains the files
-# Output: list of Strings, each one a full directory path to a PNG image
-# def get_pictures(dirName): 
-#     """ 
-#     Recursively find PNG files in dirName. 
-#     """ 
-
-#     allFiles = [] 
-#     for root, _, files in os.walk(dirName): 
-#         for filename in files: 
-#             if filename.lower().endswith(".png"): 
-#                 allFiles.append(os.path.join(root, filename))
-
-#     return allFiles
 
 # Create the CVD simulation, compensation, and colour space transformation matrices
 # Input: blindType - String, first letter should match either p, d, or t
@@ -252,41 +169,6 @@ def delinearize(image):
     
     return np.clip(np.round(value * 255.0), 0, 255 ).astype(np.uint8)
 
-# Wrapper function for the thread to handle the progress bar
-# Input: counter - SimpleNamespace, counting how many units of work done as n
-# Input length - integer, the total amount of work to be done
-# Output: None
-def progress(counter, length): 
-    """ 
-    Wrapper for the progress display thread. 
-    """ 
-
-    while counter.n < length: 
-        prog_bar(counter.n, length) 
-
-    prog_bar(length, length) 
-    print()
-
-# Display a progress bar on the command line composed of # and spaces
-# Input: current_val - integer, amount of work done
-# Input: end_val - integer, total amount of work to do
-# Input; bar_length - integer, how long the progress bar should be, in characters
-# Output: None
-def prog_bar(current_val, end_val, bar_length=20): 
-    """ 
-    Display a progress bar on the command line. 
-    """ 
-    if end_val == 0: 
-        percent = 1.0 
-    else: 
-        percent = float(current_val) / end_val 
-
-    hashes = "#" * int(round(percent * bar_length)) 
-    spaces = " " * (bar_length - len(hashes)) 
-
-    sys.stdout.write("\rPercent: [{0}] {1}% | {2}/{3} |".format( hashes + spaces, int(round(percent * 100)), current_val, end_val)) 
-    sys.stdout.flush()
-
 # Wrapper for linear interpolation to change the processing strength based on user input value
 # Input: number - an arbitrary number that can cast to float, acts as '100%'
 # Input: strength - a percentage that can cast to float, acts as % of number
@@ -297,3 +179,122 @@ def calc_correct(number, strength):
     """
 
     return np.interp(strength, [0, 100], [0, number])
+
+# Wrapper function for the thread to handle the progress bar
+# Input: counter - SimpleNamespace, counting how many units of work done as n
+# Input length - integer, the total amount of work to be done
+# Output: None
+# def progress(counter, length): 
+#     """ 
+#     Wrapper for the progress display thread. 
+#     """ 
+
+#     while counter.n < length: 
+#         prog_bar(counter.n, length) 
+
+#     prog_bar(length, length) 
+#     print()
+
+# Display a progress bar on the command line composed of # and spaces
+# Input: current_val - integer, amount of work done
+# Input: end_val - integer, total amount of work to do
+# Input; bar_length - integer, how long the progress bar should be, in characters
+# Output: None
+# def prog_bar(current_val, end_val, bar_length=20): 
+#     """ 
+#     Display a progress bar on the command line. 
+#     """ 
+#     if end_val == 0: 
+#         percent = 1.0 
+#     else: 
+#         percent = float(current_val) / end_val 
+
+#     hashes = "#" * int(round(percent * bar_length)) 
+#     spaces = " " * (bar_length - len(hashes)) 
+
+#     sys.stdout.write("\rPercent: [{0}] {1}% | {2}/{3} |".format( hashes + spaces, int(round(percent * 100)), current_val, end_val)) 
+#     sys.stdout.flush()
+
+
+# def main(): 
+#     """ 
+#     Main command-line entry point. 
+#     """ 
+#     cvdType = input("Protanopia, Deuteranopia, or Tritanopia? ") 
+#     picPath = input("Path to pictures: ") 
+#     strength = input("Strength of colour compensation (0-100, 100 = Full Strength): ")
+
+#     try: 
+#         strength = float(strength) 
+#     except ValueError: 
+#         print("Strength must be a number from 0 to 100.") 
+#         return 
+    
+#     strength = max(0.0, min(100.0, strength)) 
+
+#     pictureList = get_pictures(picPath) 
+#     if not pictureList: 
+#         print("No PNG files were found.") 
+#         return 
+    
+#     picCounter = SimpleNamespace() 
+#     picCounter.n = 0 
+
+#     # Distribute image files across several worker threads. 
+#     threadCount = max(1, (len(pictureList) + 19) // 20) 
+#     threadCount = min(threadCount, len(pictureList)) 
+#     dividedList = np.array_split( pictureList, threadCount)
+
+#     threads = [] 
+#     for fileList in dividedList: 
+#         thread = threading.Thread(target=imageProcess, args=(cvdType, fileList.tolist(), picCounter, strength)) 
+#         threads.append(thread) 
+#         thread.start() 
+
+#     prog = threading.Thread(target=progress, args=(picCounter, len(pictureList)), daemon=True) 
+#     prog.start() 
+
+#     for thread in threads: 
+#         thread.join() 
+#         prog.join()
+
+# Process the images given by picList according to the colourblindness given by blindType
+# Input: blindType - String, first letter matching one of p, d, or t
+# Input: picList - list of Strings, where the strings are directory paths to a png image
+# Input: picCounter - SimpleNamespace, to keep track of overall progress
+# Input: sigStrength - int, the % of correction to apply
+# Output: None, images are edited in-place
+# def imageProcess(blindType, picList, picCounter, sigStrength): 
+#     """ 
+#     Process a list of PNG images. 
+#     Each image is processed as a complete NumPy array. 
+#     """ 
+
+#     for imagePath in picList: 
+#         try: 
+#             with Image.open(imagePath) as source: 
+#                 im = source.convert("RGBA") 
+#                 corrected = daltonize_image(im, blindType, sigStrength) 
+
+#                 corrected.save(imagePath) 
+
+#         except Exception as exc: 
+#             print( f"\nError processing '{imagePath}': {exc}", file=sys.stderr) 
+
+#         finally: picCounter.n += 1
+
+# Recursively search a given directory for PNG files
+# Input: dirname - String representation of the folder path that contains the files
+# Output: list of Strings, each one a full directory path to a PNG image
+# def get_pictures(dirName): 
+#     """ 
+#     Recursively find PNG files in dirName. 
+#     """ 
+
+#     allFiles = [] 
+#     for root, _, files in os.walk(dirName): 
+#         for filename in files: 
+#             if filename.lower().endswith(".png"): 
+#                 allFiles.append(os.path.join(root, filename))
+
+#     return allFiles
