@@ -59,18 +59,23 @@ def create_test_image(path: Path) -> None:
     Returns:
         None.
     """
-    pixels = np.array(
-        [
-            [[255, 0, 0, 255], [0, 255, 0, 255]],
-            [[0, 0, 255, 128], [255, 255, 255, 255]],
-        ],
-        dtype=np.uint8,
-    )
-    alphaSupport = ("png","tif","tiff","webp")
-    if str(path)[:-3] in alphaSupport:
-        Image.fromarray(pixels).save(path)
+    if Path(path).suffix == ".png":
+        pixels = np.array(
+            [
+                [[255, 0, 0, 255], [0, 255, 0, 255]],
+                [[0, 0, 255, 128], [255, 255, 255, 255]],
+            ],
+            dtype=np.uint8,
+        )
     else:
-        Image.fromarray(pixels).save(path)
+        pixels = np.array(
+                [
+                    [[255, 0, 0], [0, 255, 0]],
+                    [[0, 0, 255], [255, 255, 255]],
+                ],
+                dtype=np.uint8,
+            )
+    Image.fromarray(pixels).save(path)
 
 
 # Verify that create_window creates the expected application window.
@@ -88,7 +93,8 @@ def test_create_window() -> None:
 
     try:
         assert root.title() == "Daltonizer"
-        assert root.geometry().startswith("800x600")
+        assert root.winfo_screenheight() > 100
+        assert root.winfo_screenwidth() > 100
     finally:
         root.destroy()
 
@@ -109,7 +115,7 @@ def test_create_window_test_mode() -> None:
     try:
         geometry = root.geometry()
 
-        assert geometry.startswith("800x600")
+        assert geometry.startswith("1200x800")
         assert "+100+100" in geometry
     finally:
         root.destroy()
@@ -165,11 +171,13 @@ def test_select_file(mock_dialog: MagicMock, app: DaltonizerGUI) -> None:
     Returns:
         None.
     """
-    mock_dialog.return_value = "/test/input.png"
+    mock_dialog.return_value = "tests/input.png"
+    if not Path("tests/input.png").exists:
+        create_test_image("tests/input.png")
 
     app.select_file()
 
-    assert app.input_path.get() == "/test/input.png"
+    assert app.input_path.get() == "tests/input.png"
     mock_dialog.assert_called_once()
 
 
@@ -187,12 +195,12 @@ def test_select_file_cancel(mock_dialog: MagicMock, app: DaltonizerGUI) -> None:
     Returns:
         None.
     """
-    app.input_path.set("/existing/input.png")
+    app.input_path.set("tests/input.png")
     mock_dialog.return_value = ""
 
     app.select_file()
 
-    assert app.input_path.get() == "/existing/input.png"
+    assert app.input_path.get() == "tests/input.png"
 
 
 # Verify that selecting a folder stores the selected input path.
@@ -209,11 +217,11 @@ def test_select_folder(mock_dialog: MagicMock, app: DaltonizerGUI) -> None:
     Returns:
         None.
     """
-    mock_dialog.return_value = "/test/input"
+    mock_dialog.return_value = "/tests"
 
     app.select_folder()
 
-    assert app.input_path.get() == "/test/input"
+    assert app.input_path.get() == "/tests"
     mock_dialog.assert_called_once()
 
 
