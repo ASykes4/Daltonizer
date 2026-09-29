@@ -3,8 +3,8 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image
-from daltonizer import daltonize_image
+from PIL import Image, ImageOps, ImageTk
+from daltonizer import daltonize_image, simulate_cvd
 
 class DaltonizerGUI:
 
@@ -12,7 +12,6 @@ class DaltonizerGUI:
 
         self.root = root
         self.root.title("Daltonizer")
-        self.root.geometry("500x600")
         self.root.resizable(True, True)
 
         # Variables
@@ -20,9 +19,19 @@ class DaltonizerGUI:
         self.input_path = tk.StringVar()
         self.output_path = tk.StringVar()
         self.cvd_type = tk.StringVar(value="Deuteranopia")
+        self.cvd_type.trace_add("write", self.update_cvd_preview)
         self.strength = tk.IntVar(value=100)
         self.status = tk.StringVar(value="Ready")
         self.progress_value = tk.DoubleVar(value=0)
+
+        # Image display
+        self.preview_source = None
+        self.preview_original = None
+        self.preview_simulated = None
+        self.preview_corrected = None
+        self.preview_photo_original = None
+        self.preview_photo_simulated = None
+        self.preview_photo_corrected = None
 
         # Build interface
         self.create_widgets()
@@ -101,16 +110,137 @@ class DaltonizerGUI:
         self.strength_label.pack(side="left", padx=(10, 0))
         self.strength_scale.set(self.strength.get())
 
+        self.create_preview_widgets(main)
+
+        # Process button
+        status_label = ttk.Label(main, textvariable=self.status)
+        status_label.pack(pady=(0, 10))
+
+        self.process_button = ttk.Button(main, text="Process", command=self.start_processing)
+        self.process_button.pack(ipadx=30, ipady=5)
+
         # Progress Bar
         self.progress = ttk.Progressbar(main, variable=self.progress_value, maximum=100)
         self.progress.pack(fill="x", pady=(15, 5))
 
-        status_label = ttk.Label(main, textvariable=self.status)
-        status_label.pack(pady=(0, 10))
 
-        # Process button
-        self.process_button = ttk.Button(main, text="Process", command=self.start_processing)
-        self.process_button.pack(ipadx=30, ipady=5)
+    # Create the three-image preview area.
+    # Input: main - ttk.Frame, parent frame for the preview
+    # Output: None, creates the original, simulated, and corrected preview widgets
+    def create_preview_widgets(self, main: ttk.Frame) -> None:
+        """Create the three-image preview area.
+
+        Args:
+            main: Parent frame containing the preview.
+
+        Returns:
+            None.
+        """
+        preview_frame = ttk.LabelFrame(main, text="Preview", padding=10)
+        preview_frame.pack(fill="both", expand=True, pady=5)
+
+        preview_columns = (
+            ("Original", "preview_original_label"),
+            ("Colour-Blind Simulation", "preview_simulated_label"),
+            ("Colour Corrected", "preview_corrected_label"),
+        )
+
+        for column, (title, attribute) in enumerate(preview_columns):
+            ttk.Label(preview_frame, text=title).grid(
+                row=0,
+                column=column,
+                padx=10,
+                pady=(0, 5)
+            )
+
+            label = ttk.Label(
+                preview_frame,
+                text="No image selected",
+                anchor="center",
+                width=40
+            )
+            label.grid(row=1, column=column, padx=10, pady=5, sticky="nsew")
+
+            setattr(self, attribute, label)
+
+            preview_frame.columnconfigure(column, weight=1)
+
+        preview_frame.rowconfigure(1, weight=1)
+
+
+    # Resize an image to fit within the preview dimensions without distortion.
+    # Input: image - Image.Image, PIL image to resize
+    # Input: maximum_size - tuple[int, int], maximum preview width and height
+    # Output: Image.Image, resized copy that fits within maximum_size
+    def prepare_preview_image(self, image: Image.Image, maximum_size: tuple[int, int] = (350, 260)) -> Image.Image:
+        """Prepare an image for display in a preview widget.
+
+        Args:
+            image: PIL image to resize.
+            maximum_size: Maximum width and height of the preview.
+
+        Returns:
+            A resized copy of the image that preserves its aspect ratio.
+        """
+        preview = image.copy()
+        return ImageOps.contain(preview, maximum_size)
+
+
+    # Load an image into the preview and generate its initial transformations.
+    # Input: image_path - str, path to the image to preview
+    # Output: None, loads the source image and updates all three previews
+    def load_preview(self, image_path: str) -> None:
+        """Load an image and display its three preview versions.
+
+        Args:
+            image_path: Path to the image that should be previewed.
+
+        Returns:
+            None.
+        """
+        with Image.open(image_path) as source:
+            self.preview_source = source.convert("RGBA")
+
+        self.update_preview()
+
+
+    # Generate and display the simulation and correction previews.
+    # Input: None, uses the current source image and correction settings
+    # Output: None, updates all three preview widgets
+    def update_preview(self) -> None:
+        """Regenerate and display all three preview images.
+
+        Returns:
+            None.
+        """
+        if self.preview_source is None:
+            return
+
+        preview = self.prepare_preview_image(self.preview_source)
+
+        simulated = simulate_cvd(
+            preview,
+            self.cvd_type.get(),
+            self.strength.get()
+        )
+
+        corrected = daltonize_image(
+            preview,
+            self.cvd_type.get(),
+            self.strength.get()
+        )
+
+        original_preview = self.prepare_preview_image(preview)
+        simulated_preview = self.prepare_preview_image(simulated)
+        corrected_preview = self.prepare_preview_image(corrected)
+
+        self.preview_photo_original = ImageTk.PhotoImage(original_preview)
+        self.preview_photo_simulated = ImageTk.PhotoImage(simulated_preview)
+        self.preview_photo_corrected = ImageTk.PhotoImage(corrected_preview)
+
+        self.preview_original_label.config(image=self.preview_photo_original, text="")
+        self.preview_simulated_label.config(image=self.preview_photo_simulated, text="")
+        self.preview_corrected_label.config(image=self.preview_photo_corrected, text="")
 
 
     # File selection
@@ -142,15 +272,32 @@ class DaltonizerGUI:
             self.input_path.set(path)
             directory = os.path.dirname(path)
             self.output_path.set(os.path.join(directory, "Daltonized"))
+            self.load_preview(path)
 
 
-    def select_folder(self):
+    # Select an input folder and load its first image into the preview.
+    # Input: None, obtains the folder through the Tkinter directory dialog
+    # Output: None, updates the input/output paths and preview
+    def select_folder(self) -> None:
+        """Select an input folder and preview its first supported image.
 
+        Returns:
+            None.
+        """
         path = filedialog.askdirectory(title="Select image folder")
 
-        if path:
-            self.input_path.set(path)
-            self.output_path.set(os.path.join(path, "Daltonized"))
+        if not path:
+            return
+
+        self.input_path.set(path)
+        self.output_path.set(os.path.join(path, "Daltonized"))
+
+        images = self.get_images(path)
+
+        if images:
+            self.load_preview(images[0])
+        else:
+            self.clear_preview()
 
 
     def select_output_folder(self):
@@ -160,12 +307,61 @@ class DaltonizerGUI:
         if path:
             self.output_path.set(path)
 
-    # Strength
-    def update_strength(self, value):
 
+    # Clear all preview images and restore their placeholder text.
+    # Input: None, uses the three preview labels
+    # Output: None, removes the currently displayed preview images
+    def clear_preview(self) -> None:
+        """Clear all preview images.
+
+        Returns:
+            None.
+        """
+        self.preview_source = None
+        self.preview_photo_original = None
+        self.preview_photo_simulated = None
+        self.preview_photo_corrected = None
+
+        self.preview_original_label.config(image="", text="No image selected")
+        self.preview_simulated_label.config(image="", text="No image selected")
+        self.preview_corrected_label.config(image="", text="No image selected")
+        
+
+    # Update the correction strength and refresh the preview.
+    # Input: value - str | float, slider value supplied by Tkinter
+    # Output: None, updates the strength setting and preview
+    def update_strength(self, value: str | float) -> None:
+        """Update the correction strength and refresh the preview.
+
+        Args:
+            value: Current value supplied by the strength slider.
+
+        Returns:
+            None.
+        """
         value = int(float(value))
         self.strength.set(value)
         self.strength_label.config(text=f"{value}%")
+        self.update_preview()
+
+
+    # Refresh the preview after the colour-vision deficiency changes.
+    # Input: name - str, Tkinter variable name
+    # Input: index - str, Tkinter trace index
+    # Input: mode - str, Tkinter trace operation
+    # Output: None, regenerates the simulated and corrected previews
+    def update_cvd_preview(self, name: str, index: str, mode: str) -> None:
+        """Refresh the preview when the selected deficiency changes.
+
+        Args:
+            name: Tkinter variable name supplied by the trace callback.
+            index: Tkinter trace index supplied by the trace callback.
+            mode: Tkinter trace operation supplied by the trace callback.
+
+        Returns:
+            None.
+        """
+        self.update_preview()
 
 
     # Find images
@@ -351,9 +547,9 @@ def create_window(test_mode: bool = False) -> tk.Tk:
     
     root = tk.Tk() 
     root.title("Daltonizer") 
-    root.geometry("400x600") 
+    root.geometry("1200x800") 
     if test_mode: 
-        root.geometry("400x600+100+100") 
+        root.geometry("1200x800+100+100") 
 
     root.update_idletasks() 
     return root 
